@@ -714,14 +714,7 @@
             addMessageToChat('Thinking...', 'ai', true);
             const prompt = `You are 'Reading Companion'. A child wants to chat more about a book they already finished: "${book.title}". Your task is to start a reflective conversation. Remind them about a key theme, ask what they remember most, or explain what makes the book special. Then ask one engaging, open-ended question to get the chat started. Format as: [REFLECTION] Your message. [QUESTION] Your question.`;
             const fullResponse = await callGeminiAPI(prompt);
-            const reflection = fullResponse.match(/\[REFLECTION\](.*?)\[QUESTION\]/s);
-            const question = fullResponse.match(/\[QUESTION\](.*)/s);
-            if (reflection?.[1]) addMessageToSessionHistory(reflection[1].trim(), 'ai', false);
-            if (question?.[1]) {
-                currentChat.lastQuestion = question[1].trim();
-                addMessageToSessionHistory(currentChat.lastQuestion, 'ai', true);
-            }
-            renderChat();
+            updateChatFromGemini(fullResponse, true); // Treat as a question
         }
 
         async function getFollowUpGeminiResponse(bookId, question, answer) {
@@ -732,12 +725,22 @@
         }
 
         function updateChatFromGemini(fullResponse, askQuestion) {
-            if (askQuestion) { const observation = fullResponse.match(/\[OBSERVATION\](.*?)\[QUESTION\]/s); const question = fullResponse.match(/\[QUESTION\](.*)/s); if (observation?.[1]) addMessageToSessionHistory(observation[1].trim(), 'ai', false); if (question?.[1]) { currentChat.lastQuestion = question[1].trim(); addMessageToSessionHistory(currentChat.lastQuestion, 'ai', true); } } 
+             if (fullResponse.startsWith("Oops!")) {
+                addMessageToSessionHistory(fullResponse, 'ai', false);
+                renderChat();
+                return;
+            }
+            if (askQuestion) { const observation = fullResponse.match(/\[OBSERVATION\](.*?)\[QUESTION\]/s) || fullResponse.match(/\[REFLECTION\](.*?)\[QUESTION\]/s); const question = fullResponse.match(/\[QUESTION\](.*)/s); if (observation?.[1]) addMessageToSessionHistory(observation[1].trim(), 'ai', false); if (question?.[1]) { currentChat.lastQuestion = question[1].trim(); addMessageToSessionHistory(currentChat.lastQuestion, 'ai', true); } } 
             else { const observation = fullResponse.match(/\[OBSERVATION\](.*?)\[SEARCH_QUERY\]/s); const searchQuery = fullResponse.match(/\[SEARCH_QUERY\](.*)/s); if (observation?.[1]) addMessageToSessionHistory(observation[1].trim(), 'ai', false); if (searchQuery?.[1]) { const url = 'https://www.google.com/search?q=' + encodeURIComponent(searchQuery[1].trim()); const linkMessage = `Here's a link to learn more: <a href="${url}" target="_blank" rel="noopener noreferrer">Explore this idea</a>.`; addMessageToSessionHistory(linkMessage, 'ai', false); } }
             renderChat();
         }
 
         function updateChatFromGeminiFollowUp(fullResponse) {
+            if (fullResponse.startsWith("Oops!")) {
+                addMessageToSessionHistory(fullResponse, 'ai', false);
+                renderChat();
+                return;
+            }
              if (fullResponse.startsWith("[INSIGHTFUL]")) {
                 fullResponse = fullResponse.replace("[INSIGHTFUL]", "").trim();
                 addMessageToSessionHistory("That's a fantastic thought! I've shared this one with your parent.", 'ai', false);
