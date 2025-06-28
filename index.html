@@ -492,7 +492,7 @@
         // --- SESSION & CHAT HANDLERS ---
         function prepareLogSessionView() { allDomElements.bookSelect.innerHTML = ''; books.filter(b => b.status !== 'finished').forEach(book => { const option = document.createElement('option'); option.value = book.id; option.textContent = book.title; allDomElements.bookSelect.appendChild(option); }); }
         
-        async function handleLogSession(event) {
+        function handleLogSession(event) {
             event.preventDefault();
             const book = books.find(b => b.id === allDomElements.bookSelect.value);
             const pageEndedAt = parseInt(allDomElements.pageEndedAt.value);
@@ -506,7 +506,7 @@
             currentChat = { bookId: book.id, sessionHistory: [], lastQuestion: null, isPostFinishChat: false };
             allDomElements.chatViewTitle.textContent = "Let's Chat!";
             showView('chatView', book.title);
-            await getInitialGeminiResponse(book, startPage, pageEndedAt, pagesRead);
+            getInitialGeminiResponse(book, startPage, pageEndedAt, pagesRead);
             allDomElements.logSessionForm.reset();
         }
 
@@ -628,51 +628,6 @@
             await sendEmail({ to: [account.parentEmail, account.childEmail], subject, html });
         }
         
-        // --- IMPORTANT INSTRUCTIONS ---
-        // To fix the email error, you must update the code in your Netlify function.
-        // Go to your `reading-companion-backend` project on GitHub.
-        // Edit the file located at: /netlify/functions/send-email.js
-        // Replace its entire content with the following code block:
-        /*
-        import { Resend } from 'resend';
-        const resend = new Resend(process.env.RESEND_API_KEY);
-        export const handler = async (event) => {
-          const headers = {
-            'Access-Control-Allow-Origin': '*',
-            'Access-Control-Allow-Headers': 'Content-Type',
-            'Access-Control-Allow-Methods': 'POST, OPTIONS'
-          };
-          if (event.httpMethod === 'OPTIONS') {
-            return {
-              statusCode: 204,
-              headers
-            };
-          }
-          if (event.httpMethod !== 'POST') {
-            return {
-              statusCode: 405,
-              headers,
-              body: JSON.stringify({ error: 'Method Not Allowed' }),
-            };
-          }
-          try {
-            const { to, subject, html } = JSON.parse(event.body);
-            const { data, error } = await resend.emails.send({
-              from: 'Reading Companion <onboarding@resend.dev>',
-              to: to,
-              subject: subject,
-              html: html,
-            });
-            if (error) {
-              return { statusCode: 400, headers, body: JSON.stringify(error) };
-            }
-            return { statusCode: 200, headers, body: JSON.stringify(data) };
-          } catch (error) {
-            return { statusCode: 500, headers, body: JSON.stringify({ error: 'Error sending email' }) };
-          }
-        };
-        */
-
         async function sendEmail(emailData) {
             const NETLIFY_FUNCTION_URL = 'https://mellow-lamington-c88a6f.netlify.app/.netlify/functions/send-email';
             try {
@@ -693,21 +648,9 @@
 
         async function getInitialGeminiResponse(book, startPage, endPage, pagesRead) {
             addMessageToChat('Thinking...', 'ai', true);
-            const isShortSession = pagesRead <= 10;
-            const isLongSession = pagesRead > 30;
-            const askQuestion = !isShortSession || (isShortSession && Math.random() < 0.7);
-            let prompt;
-            if (askQuestion) {
-                 prompt = `You are 'Reading Companion,' a guide for young readers. A child just read from page ${startPage} to ${endPage} of "${book.title}".
-                 ${isLongSession ? "Since they read a lot, provide a more detailed analysis with 2-3 observations about different themes or literary devices." : "Provide one short, interesting observation (1-2 sentences)."}
-                 Then, ask one engaging, open-ended question about that section.
-                 Format your response as: [OBSERVATION] Your observation(s) here. [QUESTION] Your question here.`;
-            } else {
-                prompt = `You are 'Reading Companion,' a guide for young readers. A child just read a short section (from page ${startPage} to ${endPage}) of "${book.title}". Your task is to provide a single, insightful observation and a relevant search query for them to learn more. 1. Observation: A short, interesting observation (1-2 sentences) about a theme or literary device. 2. Search Query: A concise Google search query that would find discussions about this observation. Format your response ONLY as: [OBSERVATION] Your observation here. [SEARCH_QUERY] Your search query here.`;
-            }
-            
-            const fullResponse = await callGeminiAPI(prompt);
-            updateChatFromGemini(fullResponse, askQuestion);
+            // This now just dispatches the call, the UI update happens in updateChatFromGemini
+            const fullResponsePromise = callGeminiAPI(buildInitialPrompt(book, startPage, endPage, pagesRead));
+            updateChatFromGemini(await fullResponsePromise, pagesRead > 10 || (pagesRead <= 10 && Math.random() < 0.7));
         }
         
         async function getPostReadingReflection(book) {
@@ -722,6 +665,21 @@
             const prompt = `You are 'Reading Companion,' a 'book club friend' for young readers. A child was asked this question: "${question}". They responded: "${answer}". Your task is to reply naturally. 1. First, respond to their answer. If the answer is insightful, start your reply with "[INSIGHTFUL]". If the answer is sassy/rude, respond with humor, remind them their parent will see it, and ask them to try again. End your entire response with the tag [TRY_AGAIN]. Otherwise, just give a normal, encouraging reply. 2. Second, decide if the conversation should continue based on their answer's depth. If you want to continue, add another interesting observation and a new question, then end your entire response with the tag [CONTINUE_CHAT]. If you want to end the conversation, just give a friendly sign-off (e.g., "Great chat! Talk to you next time!"), and end your entire response with the tag [END_CHAT].`;
             const fullResponse = await callGeminiAPI(prompt);
             updateChatFromGeminiFollowUp(fullResponse);
+        }
+
+        function buildInitialPrompt(book, startPage, endPage, pagesRead) {
+            const isShortSession = pagesRead <= 10;
+            const isLongSession = pagesRead > 30;
+            const askQuestion = !isShortSession || (isShortSession && Math.random() < 0.7);
+
+            if (askQuestion) {
+                 return `You are 'Reading Companion,' a guide for young readers. A child just read from page ${startPage} to ${endPage} of "${book.title}".
+                 ${isLongSession ? "Since they read a lot, provide a more detailed analysis with 2-3 observations about different themes or literary devices." : "Provide one short, interesting observation (1-2 sentences)."}
+                 Then, ask one engaging, open-ended question about that section.
+                 Format your response as: [OBSERVATION] Your observation(s) here. [QUESTION] Your question here.`;
+            } else {
+                return `You are 'Reading Companion,' a guide for young readers. A child just read a short section (from page ${startPage} to ${endPage}) of "${book.title}". Your task is to provide a single, insightful observation and a relevant search query for them to learn more. 1. Observation: A short, interesting observation (1-2 sentences) about a theme or literary device. 2. Search Query: A concise Google search query that would find discussions about this observation. Format your response ONLY as: [OBSERVATION] Your observation here. [SEARCH_QUERY] Your search query here.`;
+            }
         }
 
         function updateChatFromGemini(fullResponse, askQuestion) {
@@ -760,11 +718,12 @@
         }
 
         async function callGeminiAPI(prompt) {
-            const loadingBubble = document.getElementById('loading-bubble'); if (loadingBubble) loadingBubble.remove();
+            const loadingBubble = document.getElementById('loading-bubble');
             const apiKey = "";
             const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
             const payload = { contents: [{ role: "user", parts: [{ text: prompt }] }] };
             try { const response = await fetch(apiUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) }); if (!response.ok) throw new Error(`API Error: ${response.status}`); const result = await response.json(); return result.candidates?.[0]?.content?.parts?.[0]?.text || "I'm not sure what to say."; } catch (error) { console.error("Error calling Gemini API:", error); return "Oops! I'm having trouble thinking."; }
+            finally { if(loadingBubble) loadingBubble.remove(); }
         }
         
         // --- CHAT HELPERS ---
