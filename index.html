@@ -737,7 +737,7 @@
         }
 
         async function callGeminiAPI(prompt) {
-            addMessageToChat('Thinking...', 'ai', true);
+            addMessageToChat('Let me think about what we can chat about...', 'ai', true);
             const isLiveEnvironment = window.location.hostname.includes('netlify.app');
             const apiUrl = isLiveEnvironment ? 
                 'https://mellow-lamington-c88a6f.netlify.app/.netlify/functions/chat' :
