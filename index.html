@@ -153,7 +153,7 @@
             </div>
             
             <div class="grid grid-cols-1 gap-4 mb-8">
-                <button id="showLogSessionBtn" class="btn btn-primary text-white font-bold py-3 px-4 rounded-xl shadow-lg disabled:bg-gray-500 disabled:border-gray-600 disabled:cursor-not-allowed disabled:transform-none">
+                <button id="showLogSessionBtn" class="btn btn-primary text-white font-bold py-3 px-4 rounded-xl shadow-lg disabled:bg-gray-500 disabled:border-gray-600 disabled:cursor-not-allowed disabled:transform-none animate-pulse">
                     Log Reading Session
                 </button>
                 <button id="showAddBookBtn" class="btn btn-secondary text-white font-bold py-3 px-4 rounded-xl shadow-lg">
@@ -591,7 +591,7 @@
         
         async function sendParentEmailChangeNotification(oldParentEmail, newParentEmail) {
             const subject = 'Security Alert: Parent Email Changed on Reading Companion';
-            const html = `<p>This is a notification that the parent email for this account has been changed from <strong>${oldParentEmail}</strong> to <strong>${newParentEmail}</strong>.</p><p>If you did not authorize this change, please contact talk to your (possibly sneaky) reader about why the change was made.</p>`;
+            const html = `<p>This is a notification that the parent email for this account has been changed from <strong>${oldParentEmail}</strong> to <strong>${newParentEmail}</strong>.</p><p>If you did not authorize this change, please contact support.</p>`;
             await sendEmail({ to: oldParentEmail, subject, html });
         }
 
