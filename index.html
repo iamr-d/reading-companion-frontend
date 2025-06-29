@@ -648,7 +648,6 @@
 
         async function getInitialGeminiResponse(book, startPage, endPage, pagesRead) {
             addMessageToChat('Thinking...', 'ai', true);
-            // This now just dispatches the call, the UI update happens in updateChatFromGemini
             const fullResponsePromise = callGeminiAPI(buildInitialPrompt(book, startPage, endPage, pagesRead));
             updateChatFromGemini(await fullResponsePromise, pagesRead > 10 || (pagesRead <= 10 && Math.random() < 0.7));
         }
@@ -718,12 +717,33 @@
         }
 
         async function callGeminiAPI(prompt) {
-            const loadingBubble = document.getElementById('loading-bubble');
-            const apiKey = "";
-            const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
-            const payload = { contents: [{ role: "user", parts: [{ text: prompt }] }] };
-            try { const response = await fetch(apiUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) }); if (!response.ok) throw new Error(`API Error: ${response.status}`); const result = await response.json(); return result.candidates?.[0]?.content?.parts?.[0]?.text || "I'm not sure what to say."; } catch (error) { console.error("Error calling Gemini API:", error); return "Oops! I'm having trouble thinking."; }
-            finally { if(loadingBubble) loadingBubble.remove(); }
+            const loadingBubble = document.getElementById('loading-bubble'); 
+            const isLiveEnvironment = window.location.hostname.includes('netlify.app');
+            const apiUrl = isLiveEnvironment ? 
+                'https://mellow-lamington-c88a6f.netlify.app/.netlify/functions/chat' :
+                `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=`;
+            
+            const payload = isLiveEnvironment ? 
+                { prompt } :
+                { contents: [{ role: "user", parts: [{ text: prompt }] }] };
+
+            try {
+                const response = await fetch(apiUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                if (!response.ok) throw new Error(`API Error: ${response.status}`);
+                const result = await response.json();
+                
+                // The live backend returns {text: "..."} while direct API has a different structure
+                return result.text || result.candidates?.[0]?.content?.parts?.[0]?.text || "I'm not sure what to say.";
+            } catch (error) {
+                console.error("Error calling Gemini API:", error);
+                return "Oops! I'm having trouble thinking.";
+            } finally {
+                if(loadingBubble) loadingBubble.remove();
+            }
         }
         
         // --- CHAT HELPERS ---
