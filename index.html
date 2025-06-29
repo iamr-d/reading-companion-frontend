@@ -246,7 +246,7 @@
                 <h1 id="chatViewTitle" class="text-2xl font-bold">Let's Chat!</h1>
                 <div class="flex items-center gap-2">
                     <button id="logFromHistoryBtn" class="btn btn-primary text-xs py-1 px-3 rounded-full">Log Session</button>
-                    <button onclick="handleDoneChatting()" class="text-sm text-gray-300 hover:text-white">Done</button>
+                    <button onclick="handleDoneChatting()" class="btn btn-secondary text-xs py-1 px-3 rounded-full animate-pulse">Done</button>
                 </div>
             </header>
             <div id="chatContainer" class="h-96 overflow-y-auto bg-gray-900/50 rounded-lg p-4 flex flex-col space-y-4 mb-4"></div>
@@ -591,7 +591,7 @@
         
         async function sendParentEmailChangeNotification(oldParentEmail, newParentEmail) {
             const subject = 'Security Alert: Parent Email Changed on Reading Companion';
-            const html = `<p>This is a notification that the parent email for this account has been changed from <strong>${oldParentEmail}</strong> to <strong>${newParentEmail}</strong>.</p><p>If you did not authorize this change, please contact support.</p>`;
+            const html = `<p>This is a notification that the parent email for this account has been changed from <strong>${oldParentEmail}</strong> to <strong>${newParentEmail}</strong>.</p><p>If you did not authorize this change, please contact talk to your (possibly sneaky) reader about why the change was made.</p>`;
             await sendEmail({ to: oldParentEmail, subject, html });
         }
 
@@ -646,24 +646,24 @@
             }
         }
 
-        async function getInitialGeminiResponse(book, startPage, endPage, pagesRead) {
-            addMessageToChat('Thinking...', 'ai', true);
-            const fullResponsePromise = callGeminiAPI(buildInitialPrompt(book, startPage, endPage, pagesRead));
-            updateChatFromGemini(await fullResponsePromise, pagesRead > 10 || (pagesRead <= 10 && Math.random() < 0.7));
+        function getInitialGeminiResponse(book, startPage, endPage, pagesRead) {
+            const prompt = buildInitialPrompt(book, startPage, endPage, pagesRead);
+            callGeminiAPI(prompt).then(fullResponse => {
+                const askQuestion = ! (pagesRead <= 10 && Math.random() >= 0.7);
+                updateChatFromGemini(fullResponse, askQuestion);
+            });
         }
         
-        async function getPostReadingReflection(book) {
-            addMessageToChat('Thinking...', 'ai', true);
+        function getPostReadingReflection(book) {
             const prompt = `You are 'Reading Companion'. A child wants to chat more about a book they already finished: "${book.title}". Your task is to start a reflective conversation. Remind them about a key theme, ask what they remember most, or explain what makes the book special. Then ask one engaging, open-ended question to get the chat started. Format as: [REFLECTION] Your message. [QUESTION] Your question.`;
-            const fullResponse = await callGeminiAPI(prompt);
-            updateChatFromGemini(fullResponse, true); // Treat as a question
+            callGeminiAPI(prompt).then(fullResponse => {
+                updateChatFromGemini(fullResponse, true); // Treat as a question
+            });
         }
 
-        async function getFollowUpGeminiResponse(bookId, question, answer) {
-            addMessageToChat('Thinking...', 'ai', true);
+        function getFollowUpGeminiResponse(bookId, question, answer) {
             const prompt = `You are 'Reading Companion,' a 'book club friend' for young readers. A child was asked this question: "${question}". They responded: "${answer}". Your task is to reply naturally. 1. First, respond to their answer. If the answer is insightful, start your reply with "[INSIGHTFUL]". If the answer is sassy/rude, respond with humor, remind them their parent will see it, and ask them to try again. End your entire response with the tag [TRY_AGAIN]. Otherwise, just give a normal, encouraging reply. 2. Second, decide if the conversation should continue based on their answer's depth. If you want to continue, add another interesting observation and a new question, then end your entire response with the tag [CONTINUE_CHAT]. If you want to end the conversation, just give a friendly sign-off (e.g., "Great chat! Talk to you next time!"), and end your entire response with the tag [END_CHAT].`;
-            const fullResponse = await callGeminiAPI(prompt);
-            updateChatFromGeminiFollowUp(fullResponse);
+            callGeminiAPI(prompt).then(updateChatFromGeminiFollowUp);
         }
 
         function buildInitialPrompt(book, startPage, endPage, pagesRead) {
@@ -717,7 +717,7 @@
         }
 
         async function callGeminiAPI(prompt) {
-            const loadingBubble = document.getElementById('loading-bubble'); 
+            addMessageToChat('Thinking...', 'ai', true);
             const isLiveEnvironment = window.location.hostname.includes('netlify.app');
             const apiUrl = isLiveEnvironment ? 
                 'https://mellow-lamington-c88a6f.netlify.app/.netlify/functions/chat' :
@@ -733,17 +733,18 @@
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(payload)
                 });
-                if (!response.ok) throw new Error(`API Error: ${response.status}`);
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    console.error("API Error Response:", errorText);
+                    throw new Error(`API Error: ${response.status}`);
+                }
                 const result = await response.json();
                 
-                // The live backend returns {text: "..."} while direct API has a different structure
                 return result.text || result.candidates?.[0]?.content?.parts?.[0]?.text || "I'm not sure what to say.";
             } catch (error) {
                 console.error("Error calling Gemini API:", error);
                 return "Oops! I'm having trouble thinking.";
-            } finally {
-                if(loadingBubble) loadingBubble.remove();
-            }
+            } 
         }
         
         // --- CHAT HELPERS ---
