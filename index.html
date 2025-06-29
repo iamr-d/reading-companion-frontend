@@ -250,7 +250,7 @@
              <header class="flex items-center justify-between mb-4">
                 <h1 id="chatViewTitle" class="text-2xl font-bold">Let's Chat!</h1>
                 <div class="flex items-center gap-2">
-                    <button id="logFromHistoryBtn" class="btn btn-primary text-xs py-1 px-3 rounded-full">Log Session</button>
+                    <button id="logFromHistoryBtn" class="btn btn-primary text-xs py-1 px-3 rounded-full">Log Another</button>
                     <button onclick="handleDoneChatting()" class="btn btn-secondary text-xs py-1 px-3 rounded-full animate-pulse">Done</button>
                 </div>
             </header>
@@ -556,6 +556,7 @@
 
         function handleLogFromHistory() {
             if (!currentChat.bookId) return;
+            handleDoneChatting(); // Save current chat before logging new one
             prepareLogSessionView();
             allDomElements.bookSelect.value = currentChat.bookId;
             showView('logSessionView', books.find(b => b.id === currentChat.bookId).title);
