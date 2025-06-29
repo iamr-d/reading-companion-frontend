@@ -251,14 +251,16 @@
                 <h1 id="chatViewTitle" class="text-2xl font-bold">Let's Chat!</h1>
                 <div class="flex items-center gap-2">
                     <button id="logFromHistoryBtn" class="btn btn-primary text-xs py-1 px-3 rounded-full">Log Another</button>
-                    <button onclick="handleDoneChatting()" class="btn btn-secondary text-xs py-1 px-3 rounded-full animate-pulse">Done</button>
                 </div>
             </header>
             <div id="chatContainer" class="h-96 overflow-y-auto bg-gray-900/50 rounded-lg p-4 flex flex-col space-y-4 mb-4"></div>
             <form id="chatResponseForm" class="space-y-2">
                 <label for="chatResponse" class="block text-sm font-medium text-gray-400">Your Response</label>
                 <textarea id="chatResponse" rows="3" required class="block w-full px-3 py-2 bg-gray-700 border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500"></textarea>
-                <button type="submit" class="btn btn-primary w-full py-2">Send</button>
+                <div class="flex items-center gap-4 pt-2">
+                     <button type="button" onclick="handleDoneChatting()" class="btn btn-secondary w-full py-2 animate-pulse">Done Chatting</button>
+                     <button type="submit" class="btn btn-primary w-full py-2">Send</button>
+                </div>
             </form>
         </div>
     </div>
