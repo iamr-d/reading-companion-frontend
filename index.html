@@ -165,7 +165,12 @@
                 <h2 class="text-xl font-bold mb-3">Recent Sessions</h2>
                 <table class="w-full text-left text-sm">
                     <thead class="text-gray-400">
-                        <tr><th class="p-2">Book</th><th class="p-2">Pages</th><th class="p-2">Time</th></tr>
+                        <tr>
+                            <th class="p-2">Book</th>
+                            <th class="p-2">End Page</th>
+                            <th class="p-2">Pages Read</th>
+                            <th class="p-2">Time</th>
+                        </tr>
                     </thead>
                     <tbody id="recentSessionsList" class="divide-y divide-gray-700">
                     </tbody>
@@ -331,7 +336,7 @@
         function renderRecentSessions() {
             allDomElements.recentSessionsList.innerHTML = '';
             const lastThreeSessions = sessions.slice(-3).reverse();
-            if (lastThreeSessions.length === 0) { allDomElements.recentSessionsList.innerHTML = `<tr><td colspan="3" class="p-4 text-center text-gray-500">No sessions logged yet.</td></tr>`; return; }
+            if (lastThreeSessions.length === 0) { allDomElements.recentSessionsList.innerHTML = `<tr><td colspan="4" class="p-4 text-center text-gray-500">No sessions logged yet.</td></tr>`; return; }
             lastThreeSessions.forEach(session => {
                 const book = books.find(b => b.id === session.bookId);
                 const isShortSession = session.timeSpent < 15;
@@ -340,8 +345,8 @@
                 if (showComment) {
                     row.classList.add('reveal-comment'); row.dataset.sessionId = session.id;
                     const funnyComments = ["A goldfish has a longer attention span...", "Was that a reading session or a blink?", "Your parent suspects one eye was closed."];
-                    row.innerHTML = `<td colspan="3" class="p-3 italic text-gray-400 comment-text">${funnyComments[Math.floor(Math.random() * funnyComments.length)]}</td>`;
-                } else { row.innerHTML = `<td class="p-2 font-semibold">${book ? book.title : 'Unknown'}</td><td class="p-2">${session.pagesRead}</td><td class="p-2">${session.timeSpent}m</td>`; }
+                    row.innerHTML = `<td colspan="4" class="p-3 italic text-gray-400 comment-text">${funnyComments[Math.floor(Math.random() * funnyComments.length)]}</td>`;
+                } else { row.innerHTML = `<td class="p-2 font-semibold">${book ? book.title : 'Unknown'}</td><td class="p-2">${session.pageEndedAt}</td><td class="p-2">${session.pagesRead}</td><td class="p-2">${session.timeSpent}m</td>`; }
                 allDomElements.recentSessionsList.appendChild(row);
             });
         }
@@ -502,7 +507,7 @@
             if (pageEndedAt < pagesRead) { alert("End page can't be less than pages read."); return; }
             const startPage = pageEndedAt - pagesRead;
             book.lastPageRead = pageEndedAt;
-            sessions.push({ id: `session-${Date.now()}`, bookId: book.id, pagesRead, timeSpent, date: new Date().toISOString() });
+            sessions.push({ id: `session-${Date.now()}`, bookId: book.id, pagesRead, timeSpent, pageEndedAt, date: new Date().toISOString() });
             currentChat = { bookId: book.id, sessionHistory: [], lastQuestion: null, isPostFinishChat: false };
             allDomElements.chatViewTitle.textContent = "Let's Chat!";
             showView('chatView', book.title);
@@ -522,9 +527,12 @@
         function handleDoneChatting() {
             const book = books.find(b => b.id === currentChat.bookId);
             if (book) { 
-                if (currentChat.sessionHistory.length > (book.chatHistory?.length || 0)) {
+                const hasNewMessages = currentChat.sessionHistory.length > (book.chatHistory?.length || 0);
+                if (hasNewMessages) {
                     const newMessages = currentChat.sessionHistory.slice(book.chatHistory?.length || 0);
-                    if (!currentChat.isPostFinishChat) {
+                    if (currentChat.isPostFinishChat) {
+                        sendPostFinishChatEmail(book, newMessages);
+                    } else {
                         sendEmailNotification(book, newMessages);
                     }
                     book.chatHistory.push(...newMessages);
@@ -578,7 +586,7 @@
             const book = books.find(b => b.id === session.bookId);
             if (!session || !book) return;
             rowElement.classList.add('magic-reveal-start');
-            rowElement.innerHTML = `<td class="p-2 stats-text">${book.title}</td><td class="p-2 stats-text">${session.pagesRead}</td><td class="p-2 stats-text">${session.timeSpent}m</td>`;
+            rowElement.innerHTML = `<td class="p-2 stats-text">${book.title}</td><td class="p-2 stats-text">${session.pageEndedAt}</td><td class="p-2 stats-text">${session.pagesRead}</td><td class="p-2 stats-text">${session.timeSpent}m</td>`;
             setTimeout(() => rowElement.classList.remove('magic-reveal-start', 'reveal-comment'), 1000);
         }
 
@@ -601,7 +609,7 @@
                 <h2>Session Details:</h2>
                 <p><strong>Book:</strong> ${book.title}</p>
                 <p><strong>Pages Read:</strong> ${lastSession.pagesRead}</p>
-                <p><strong>Ended At:</strong> Page ${book.lastPageRead}</p>
+                <p><strong>Ended At:</strong> Page ${lastSession.pageEndedAt}</p>
                 <p><strong>Time Spent:</strong> ${lastSession.timeSpent} minutes</p>
                 <hr>
             `;
@@ -614,6 +622,15 @@
             await sendEmail({ to: account.parentEmail, subject, html });
         }
         
+        async function sendPostFinishChatEmail(book, newMessages) {
+            const chatTranscript = newMessages.map(msg => {
+                return msg.sender === 'user' ? `<p><b>${account.readerName}:</b> ${msg.content}</p>` : `<p><b>AI:</b> ${msg.content}</p>`;
+            }).join('');
+            const subject = `New Reflections on: ${book.title}`;
+            const html = `<h1>New Reflections!</h1><p>${account.readerName} had some more thoughts on <strong>${book.title}</strong>.</p><hr><h2>New Chat Transcript:</h2>${chatTranscript}`;
+            await sendEmail({ to: account.parentEmail, subject, html });
+        }
+
         async function sendFinalReportEmail(book) {
             let qaList = "";
             for (let i = 0; i < book.chatHistory.length; i++) {
